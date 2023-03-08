@@ -1,11 +1,14 @@
 package log
 
 import (
+	"fmt"
 	nested "github.com/antonfisher/nested-logrus-formatter"
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"github.com/sirupsen/logrus"
 	"io"
 	"os"
+	"path"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -15,28 +18,30 @@ var (
 	once   sync.Once
 )
 
-func Init(cfg Config) *logrus.Logger {
+func Api(cfg *Config) *logrus.Logger {
 	once.Do(func() {
 		// 设置日志格式为json格式
 		logger = logrus.New()
 		logger.SetFormatter(&nested.Formatter{
 			HideKeys:        true,
-			TimestampFormat: "2006-01-02 15:04:05",
+			TimestampFormat: "[2006-01-02 15:04:05]",
 			CallerFirst:     true,
+			CustomCallerFormatter: func(f *runtime.Frame) string {
+				return fmt.Sprintf("[%s:%d]", path.Base(f.File), f.Line)
+			},
 		})
 		logger.SetReportCaller(true)
-		logger.SetOutput(os.Stdout)
 		logger.SetLevel(6)
 
 		writer, _ := rotatelogs.New(
 			cfg.Path+".%Y%m%d%H%M",
 			rotatelogs.WithLinkName(cfg.Path),
-			rotatelogs.WithMaxAge(time.Hour*time.Duration(cfg.MaxAge)),
-			rotatelogs.WithRotationTime(time.Hour*time.Duration(cfg.RotationTime)),
+			rotatelogs.WithMaxAge(time.Second*time.Duration(cfg.MaxAge)),
+			rotatelogs.WithRotationTime(time.Second*time.Duration(cfg.RotationTime)),
 		)
 
 		fileAndStdoutWriter := io.MultiWriter(os.Stdout, writer)
-		logrus.SetOutput(fileAndStdoutWriter)
+		logger.SetOutput(fileAndStdoutWriter)
 	})
 	return logger
 }
